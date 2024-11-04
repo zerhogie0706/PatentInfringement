@@ -1,0 +1,25 @@
+# Python
+*.pyc
+__pycache__/
+*.pyo
+*.pyd
+*.env
+.env
+
+# Django
+db.sqlite3
+/static
+/media
+/staticfiles
+
+# Docker
+*.log
+*.pot
+*.pyc
+*.so
+*.tmp
+*.pid
+*.swp
+*.swo
+*.DS_Store
+*.dockerignore
