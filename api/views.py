@@ -1,3 +1,4 @@
+import ast
 import json
 import openai
 import re
@@ -8,6 +9,16 @@ from django.views.decorators.csrf import csrf_exempt
 # Set your OpenAI API key
 openai.api_key = settings.OPEN_AI_API_KEY
 openai.organization='org-dGg6pn9D4J3OiMLJYg2xDJfT'
+
+patent_data_path = 'patents.json'
+company_product_data_path = 'company_products.json'
+
+with open(patent_data_path, 'r') as file:
+    patent_data = json.load(file)
+
+
+with open(company_product_data_path, 'r') as file:
+    company_product_data = json.load(file)
 
 
 # Define a function to generate the prompt
@@ -25,9 +36,9 @@ def generate_prompt(claim, product_description):
 
 # Define a function to extract confidence score from the response
 def extract_confidence_score(response_text):
-    match = re.search(r"\b(100|[1-9]?[0-9])\b", response_text)
+    match = re.search(r"Relevance\s*:\s*(\d+)", response_text, re.IGNORECASE)
     if match:
-        return int(match.group(0))
+        return int(match.group(1))
     return 0  # Default if no score is found
 
 
@@ -50,8 +61,10 @@ def analyze_products_and_claims(products, claims, threshold=70):
                 max_tokens=200,
                 temperature=0.3
             )
-            response_text = response['choices'][0]['text']
+            print(response)
+            response_text = response['choices'][0]['message']['content']
             confidence_score = extract_confidence_score(response_text)
+            print(confidence_score)
             
             # Only consider results above the confidence threshold
             if confidence_score > threshold:
@@ -73,12 +86,32 @@ def analyze_products_and_claims(products, claims, threshold=70):
     return results
 
 
+def find_products_by_name(search_term):
+    # Iterate over each company in the data
+    for company in company_product_data.get("companies", []):
+        # Perform a case-insensitive search
+        if search_term.lower() in company.get("name", "").lower():
+            return company.get("products", [])
+    # Return None if no match is found
+    return None
+
+
 @csrf_exempt
 def check_patent_infringement(request):
     data = json.loads(request.body)
-    print(data.get('patent_id'))
-    print(data.get('company'))
-    return JsonResponse({})
+    patent_id = data.get('patent_id')
+    company = data.get('company')
+    if not patent_id or not company:
+        return JsonResponse({'msg': 'Missing data'}, 400)
+    patent = [p for p in patent_data if p['publication_number'] == patent_id][0]
+    company_products = find_products_by_name(company)
+    if not patent or not company_products:
+        return JsonResponse({'msg': 'Missing data'}, 400)
+    patent_claims = [data['text'] for data in ast.literal_eval(patent['claims'])]
+    output = analyze_products_and_claims(company_products, patent_claims, threshold=70)
+    print(output)
+    return JsonResponse({'p': output})
+
 
 # Example usage
 products = [
