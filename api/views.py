@@ -1,10 +1,14 @@
+import json
 import openai
 import re
 from django.conf import settings
+from django.http import JsonResponse
+from django.views.decorators.csrf import csrf_exempt
 
 # Set your OpenAI API key
 openai.api_key = settings.OPEN_AI_API_KEY
-client = openai.OpenAI(organization='org-dGg6pn9D4J3OiMLJYg2xDJfT')
+openai.organization='org-dGg6pn9D4J3OiMLJYg2xDJfT'
+
 
 # Define a function to generate the prompt
 def generate_prompt(claim, product_description):
@@ -37,9 +41,12 @@ def analyze_products_and_claims(products, claims, threshold=70):
         for claim in claims:
             # Generate prompt and get response from LLM
             prompt = generate_prompt(claim, product['description'])
-            response = openai.Completion.create(
-                engine="gpt-4",
-                prompt=prompt,
+            response = openai.ChatCompletion.create(
+                model="gpt-4",
+                messages=[
+                    {"role": "system", "content": "You are an assistant analyzing patent relevance."},
+                    {"role": "user", "content": prompt}
+                ],
                 max_tokens=200,
                 temperature=0.3
             )
@@ -65,6 +72,14 @@ def analyze_products_and_claims(products, claims, threshold=70):
 
     return results
 
+
+@csrf_exempt
+def check_patent_infringement(request):
+    data = json.loads(request.body)
+    print(data.get('patent_id'))
+    print(data.get('company'))
+    return JsonResponse({})
+
 # Example usage
 products = [
     {"name": "Walmart Shopping App", "description": "Mobile app with integrated shopping list and advertisement features"},
@@ -77,8 +92,8 @@ claims = [
 ]
 
 # Run the analysis and get the structured output
-output = analyze_products_and_claims(products, claims, threshold=70)
+# output = analyze_products_and_claims(products, claims, threshold=70)
 
-# Print the result in JSON format
-import json
-print(json.dumps(output, indent=2))
+# # Print the result in JSON format
+# import json
+# print(json.dumps(output, indent=2))
