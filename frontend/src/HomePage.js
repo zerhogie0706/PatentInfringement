@@ -6,9 +6,13 @@ import axios from 'axios';
 function HomePage() {
   const [patentId, setPatentId] = useState('');
   const [company, setCompany] = useState('');
+  const [responseData, setResponseData] = useState(null);
+  const [loading, setLoading] = useState(false);
 
   const handleSubmit = async (event) => {
     event.preventDefault();
+    setLoading(true);
+    setResponseData(null);
 
     // Prepare the data to send
     const data = {
@@ -19,17 +23,16 @@ function HomePage() {
     try {
       // Send a POST request to the backend
       const response = await axios.post('/api/check-patent-infringement/', data);
-      console.log('Response:', response.data);
-      // Handle the response or update the UI as needed
-      alert('Request sent successfully!');
+      setResponseData(response.data);
     } catch (error) {
-      console.error('Error sending data:', error);
       alert('There was an error sending the request.');
+    } finally {
+      setLoading(false); // Stop loading state
     }
   };
 
   return (
-    <div style={{ maxWidth: '400px', margin: 'auto', padding: '20px', textAlign: 'center' }}>
+    <div style={{ maxWidth: '600px', margin: 'auto', padding: '20px', textAlign: 'center' }}>
       <h2>Patent Infringement Checker</h2>
       <form onSubmit={handleSubmit}>
         <div style={{ marginBottom: '10px' }}>
@@ -64,9 +67,26 @@ function HomePage() {
             cursor: 'pointer',
           }}
         >
-          Submit
+          {loading ? 'Processing...' : 'Submit'}
         </button>
       </form>
+      {responseData && (
+        <div style={{ marginTop: '20px', textAlign: 'left' }}>
+          <h3>Analysis Report</h3>
+          <p><strong>Company:</strong> {responseData.company}</p>
+          <p><strong>Patent ID:</strong> {responseData.patent_id}</p>
+          <p><strong>Analysis Date:</strong> {responseData.analysis_date}</p>
+
+          {responseData.data.map((item, index) => (
+            <div key={index} style={{ border: '1px solid #ddd', padding: '10px', marginBottom: '10px' }}>
+              <h4>Product: {item.product}</h4>
+              <p><strong>Confidence Level:</strong> {item.confidence_level}</p>
+              <p><strong>Relevant Claims:</strong> {item.claims.join(', ')}</p>
+              <p><strong>Summary:</strong> {item.summary}</p>
+            </div>
+          ))}
+        </div>
+      )}
     </div>
   );
 }

@@ -1,132 +1,29 @@
 import ast
+import datetime
 import json
-import openai
-import re
-from django.conf import settings
 from django.http import JsonResponse
 from django.views.decorators.csrf import csrf_exempt
-
-# Set your OpenAI API key
-openai.api_key = settings.OPEN_AI_API_KEY
-openai.organization='org-dGg6pn9D4J3OiMLJYg2xDJfT'
-
-patent_data_path = 'patents.json'
-company_product_data_path = 'company_products.json'
-
-with open(patent_data_path, 'r') as file:
-    patent_data = json.load(file)
-
-
-with open(company_product_data_path, 'r') as file:
-    company_product_data = json.load(file)
-
-
-# Define a function to generate the prompt
-def generate_prompt(claim, product_description):
-    return f"""
-    Analyze the relevance between the following patent claim and product description.
-    
-    **Patent Claim:** {claim}
-    
-    **Product Description:** {product_description}
-    
-    Provide a summary explaining any functional similarities. Rate the relevance on a scale of 0-100, where 100 indicates a high level of similarity.
-    """
-
-
-# Define a function to extract confidence score from the response
-def extract_confidence_score(response_text):
-    match = re.search(r"Relevance\s*:\s*(\d+)", response_text, re.IGNORECASE)
-    if match:
-        return int(match.group(1))
-    return 0  # Default if no score is found
-
-
-# Define a function to run the analysis
-def analyze_products_and_claims(products, claims, threshold=70):
-    results = []
-    for product in products:
-        relevant_claims = []
-        explanations = []
-        
-        for claim in claims:
-            # Generate prompt and get response from LLM
-            prompt = generate_prompt(claim, product['description'])
-            response = openai.ChatCompletion.create(
-                model="gpt-4",
-                messages=[
-                    {"role": "system", "content": "You are an assistant analyzing patent relevance."},
-                    {"role": "user", "content": prompt}
-                ],
-                max_tokens=200,
-                temperature=0.3
-            )
-            print(response)
-            response_text = response['choices'][0]['message']['content']
-            confidence_score = extract_confidence_score(response_text)
-            print(confidence_score)
-            
-            # Only consider results above the confidence threshold
-            if confidence_score > threshold:
-                relevant_claims.append(claim)
-                explanations.append({
-                    "confidence_score": confidence_score,
-                    "explanation": response_text.strip()
-                })
-
-        # Only add product results if there's at least one relevant claim above threshold
-        if relevant_claims:
-            results.append({
-                "product_name": product['name'],
-                "confidence_score": max([exp['confidence_score'] for exp in explanations]),
-                "relevant_claims": relevant_claims,
-                "summarized_explanation": "; ".join([exp["explanation"] for exp in explanations])
-            })
-
-    return results
-
-
-def find_products_by_name(search_term):
-    # Iterate over each company in the data
-    for company in company_product_data.get("companies", []):
-        # Perform a case-insensitive search
-        if search_term.lower() in company.get("name", "").lower():
-            return company.get("products", [])
-    # Return None if no match is found
-    return None
+from .utils import analyze_products_and_claims, find_products_by_name, patent_data
 
 
 @csrf_exempt
 def check_patent_infringement(request):
     data = json.loads(request.body)
     patent_id = data.get('patent_id')
-    company = data.get('company')
-    if not patent_id or not company:
+    company_name = data.get('company')
+    if not patent_id or not company_name:
         return JsonResponse({'msg': 'Missing data'}, 400)
     patent = [p for p in patent_data if p['publication_number'] == patent_id][0]
-    company_products = find_products_by_name(company)
+    company, company_products = find_products_by_name(company_name)
     if not patent or not company_products:
         return JsonResponse({'msg': 'Missing data'}, 400)
+
     patent_claims = [data['text'] for data in ast.literal_eval(patent['claims'])]
-    output = analyze_products_and_claims(company_products, patent_claims, threshold=70)
-    print(output)
-    return JsonResponse({'p': output})
-
-
-# Example usage
-products = [
-    {"name": "Walmart Shopping App", "description": "Mobile app with integrated shopping list and advertisement features"},
-    {"name": "Scan & Go", "description": "App allows users to add items to their shopping list while scanning"}
-]
-
-claims = [
-    "A method for generating a digital shopping list triggered by ad selection",
-    "A system that automatically syncs a shopping list based on ad interaction"
-]
-
-# Run the analysis and get the structured output
-# output = analyze_products_and_claims(products, claims, threshold=70)
-
-# # Print the result in JSON format
-# import json
-# print(json.dumps(output, indent=2))
+    patent_claims = patent_claims[:10]
+    output = analyze_products_and_claims(company_products, patent_claims)
+    return JsonResponse({
+        'data': output,
+        'analysis_date': datetime.datetime.now().strftime("%Y-%m-%d"),
+        'company': company,
+        'patent_id': patent_id,
+    })
