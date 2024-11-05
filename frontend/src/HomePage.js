@@ -7,12 +7,14 @@ function HomePage() {
   const [patentId, setPatentId] = useState('');
   const [company, setCompany] = useState('');
   const [responseData, setResponseData] = useState(null);
+  const [error, setError] = useState(null);
   const [loading, setLoading] = useState(false);
 
   const handleSubmit = async (event) => {
     event.preventDefault();
     setLoading(true);
     setResponseData(null);
+    setError(null);
 
     // Prepare the data to send
     const data = {
@@ -25,7 +27,12 @@ function HomePage() {
       const response = await axios.post('/api/check-patent-infringement/', data);
       setResponseData(response.data);
     } catch (error) {
-      alert('There was an error sending the request.');
+      if (error.response && error.response.status === 400) {
+        console.log(error.response.data.msg);
+        setError(error.response.data.msg || 'Invalid request. Please check your input.');
+      } else {
+        setError('An error occurred while processing your request.');
+      }
     } finally {
       setLoading(false); // Stop loading state
     }
@@ -70,7 +77,14 @@ function HomePage() {
           {loading ? 'Processing...' : 'Submit'}
         </button>
       </form>
-      {responseData && (
+
+      {error && (
+        <div style={{ color: 'red', marginTop: '20px' }}>
+          <p><strong>Error:</strong> {error}</p>
+        </div>
+      )}
+
+      {responseData && !error && (
         <div style={{ marginTop: '20px', textAlign: 'left' }}>
           <h3>Analysis Report</h3>
           <p><strong>Company:</strong> {responseData.company}</p>
