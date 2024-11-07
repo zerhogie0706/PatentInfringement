@@ -89,7 +89,7 @@ def analyze_products_and_claims(products, claims):
             {"role": "user", "content": prompt}
         ],
         max_tokens=2000,
-        temperature=0.3,
+        temperature=0.1,
     )
 
     # Extract the response content
